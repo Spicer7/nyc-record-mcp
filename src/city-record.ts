@@ -35,6 +35,13 @@ export type CityRecordNotice = {
   zip_code?: string;
 };
 
+// Escape a value for interpolation into a SoQL string literal. Values must be
+// plain text — buildUrl's URLSearchParams handles URL encoding, so anything
+// pre-encoded (e.g. with encodeURIComponent) reaches Socrata double-encoded.
+function escapeSoql(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
 function buildUrl(params: Record<string, string>): string {
   const url = new URL(`${BASE_URL}/resource/${DATASET_ID}.json`);
   for (const [key, value] of Object.entries(params)) {
@@ -71,7 +78,7 @@ export async function getNoticesByAgency(
   limit = 25
 ): Promise<CityRecordNotice[]> {
   return sodaFetch({
-    $where: `upper(agency_name) like upper('%25${encodeURIComponent(agencyName)}%25')`,
+    $where: `upper(agency_name) like upper('%${escapeSoql(agencyName)}%')`,
     $limit: String(limit),
     $order: "start_date DESC",
   });
@@ -118,6 +125,89 @@ export async function getOpenSolicitations(
     $where: `type_of_notice_description='Solicitation' AND due_date >= '${today}'`,
     $limit: String(limit),
     $order: "due_date ASC",
+  });
+}
+
+export type AmountMention = {
+  amount: string;
+  context: string;
+};
+
+export type ProcurementSearchResult = CityRecordNotice & {
+  amounts_in_description?: AmountMention[];
+};
+
+// Agencies like NYCHA often bundle several line awards into one Award notice,
+// with per-development/per-line dollar figures only in the free-text
+// description. Pull each figure out with surrounding context so callers get
+// the breakdown, not just the top-line contract_amount.
+export function extractAmountMentions(notice: CityRecordNotice): AmountMention[] {
+  const mentions: AmountMention[] = [];
+  const fields = [
+    notice.additional_description_1,
+    notice.additional_description_2,
+    notice.additional_description_3,
+  ];
+  for (const text of fields) {
+    if (!text) continue;
+    const re = /\$\s?\d[\d,]*(?:\.\d{1,2})?/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      const start = Math.max(0, match.index - 120);
+      const end = Math.min(text.length, match.index + match[0].length + 40);
+      mentions.push({
+        amount: match[0].replace(/\s/g, ""),
+        context: text.slice(start, end).replace(/\s+/g, " ").trim(),
+      });
+    }
+  }
+  return mentions;
+}
+
+export type AgencyProcurementOptions = {
+  keywords?: string[];
+  noticeType?: string;
+  sinceDate?: string;
+  untilDate?: string;
+  limit?: number;
+};
+
+export async function searchAgencyProcurement(
+  agency: string,
+  options: AgencyProcurementOptions = {}
+): Promise<ProcurementSearchResult[]> {
+  const clauses = [`upper(agency_name) like upper('%${escapeSoql(agency)}%')`];
+
+  const keywords = (options.keywords ?? []).filter((k) => k.trim().length > 0);
+  if (keywords.length > 0) {
+    const keywordClauses = keywords.flatMap((keyword) => {
+      const escaped = escapeSoql(keyword);
+      return [
+        `upper(short_title) like upper('%${escaped}%')`,
+        `upper(additional_description_1) like upper('%${escaped}%')`,
+      ];
+    });
+    clauses.push(`(${keywordClauses.join(" OR ")})`);
+  }
+  if (options.noticeType) {
+    clauses.push(`type_of_notice_description='${escapeSoql(options.noticeType)}'`);
+  }
+  if (options.sinceDate) {
+    clauses.push(`start_date >= '${escapeSoql(options.sinceDate)}'`);
+  }
+  if (options.untilDate) {
+    clauses.push(`start_date <= '${escapeSoql(options.untilDate)}'`);
+  }
+
+  const notices = await sodaFetch({
+    $where: clauses.join(" AND "),
+    $limit: String(options.limit ?? 100),
+    $order: "start_date DESC",
+  });
+
+  return notices.map((notice) => {
+    const amounts = extractAmountMentions(notice);
+    return amounts.length > 0 ? { ...notice, amounts_in_description: amounts } : notice;
   });
 }
 

@@ -22,7 +22,7 @@ export SOCRATA_APP_TOKEN="your-app-token"
 
 ## What it does
 
-Exposes 7 tools over MCP:
+Exposes 8 tools over MCP:
 
 | Tool | Description |
 |---|---|
@@ -33,6 +33,7 @@ Exposes 7 tools over MCP:
 | `get_public_hearings` | Recent public hearings, comment periods, and meetings |
 | `get_open_solicitations` | Active RFPs/RFQs where the deadline has not passed |
 | `get_notices_by_date_range` | All notices published within a date window |
+| `search_agency_procurement` | One agency's notices with combined keyword, type, and date filters — built for procurement research |
 
 ---
 
@@ -149,6 +150,28 @@ get_notices_by_date_range("2026-01-01", "2026-03-31", limit=200)
 
 ---
 
+### `search_agency_procurement`
+
+Search one agency's notices with combined filters: keywords, notice type, and date range. Built for procurement research — e.g. pulling an agency's historical bid solicitations and the matching awards.
+
+Award notices include `vendor_name` and `contract_amount` (the winning bid). When a notice's description text lists further dollar figures — such as per-development line amounts in bundled NYCHA awards — they are extracted into an `amounts_in_description` array, each with surrounding context. Match a solicitation to its award via the shared `pin` field.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `agency` | string | yes | — | Agency name or partial name |
+| `keywords` | string[] | no | — | OR-matched against notice title and description |
+| `notice_type` | string | no | — | One of: Solicitation, Award, Intent to Award, Intent to Negotiate, Vendor List, Sale |
+| `since_date` | string | no | — | Only notices published on/after this date, YYYY-MM-DD |
+| `until_date` | string | no | — | Only notices published on/before this date, YYYY-MM-DD |
+| `limit` | number | no | 100 | Max results (max 1000) |
+
+```
+search_agency_procurement("Housing Authority", keywords=["paint", "floor", "vinyl"], notice_type="Solicitation", since_date="2024-07-01")
+search_agency_procurement("Housing Authority", keywords=["paint", "floor", "vinyl"], notice_type="Award", since_date="2024-07-01")
+```
+
+---
+
 ## Common workflows
 
 ### Track open RFPs before they close
@@ -170,6 +193,15 @@ get_notices_by_type("Solicitation")      → open bids from any agency
 ```
 get_notices_by_type("Award")             → recent contract awards
 search_notices("cybersecurity award")    → keyword-filtered awards
+```
+
+### Pull an agency's bid history with winning amounts
+
+```
+search_agency_procurement("Housing Authority", keywords=["paint", "floor", "vinyl"],
+                          notice_type="Solicitation", since_date="2024-07-01")   → the bids
+search_agency_procurement("Housing Authority", keywords=["paint", "floor", "vinyl"],
+                          notice_type="Award", since_date="2024-07-01")          → who won, for how much
 ```
 
 ### Find public comment opportunities

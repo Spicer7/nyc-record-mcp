@@ -14,6 +14,7 @@ import {
   getPublicHearings,
   getOpenSolicitations,
   getNoticesByDateRange,
+  searchAgencyProcurement,
 } from "./city-record.js";
 
 const server = new Server(
@@ -111,6 +112,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "search_agency_procurement",
+      description:
+        "Search one agency's City Record notices with combined filters: keyword(s), notice type, and date range. " +
+        "Built for procurement research, e.g. pulling an agency's historical solicitations and the matching awards. " +
+        "Award notices include vendor_name and contract_amount (the winning bid); when a notice's description text " +
+        "lists further dollar figures (e.g. per-development line amounts in bundled NYCHA awards), they are extracted " +
+        "into amounts_in_description with surrounding context. Match solicitations to their awards via the pin field.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agency: {
+            type: "string",
+            description: "Agency name or partial name, e.g. 'Housing Authority', 'DCAS', 'Parks'",
+          },
+          keywords: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Optional keywords, OR-matched against notice title and description, e.g. ['paint', 'floor tile', 'vinyl']",
+          },
+          notice_type: {
+            type: "string",
+            enum: [
+              "Solicitation",
+              "Award",
+              "Intent to Award",
+              "Intent to Negotiate",
+              "Vendor List",
+              "Sale",
+            ],
+            description: "Optional notice type filter",
+          },
+          since_date: { type: "string", description: "Only notices published on/after this date, YYYY-MM-DD" },
+          until_date: { type: "string", description: "Only notices published on/before this date, YYYY-MM-DD" },
+          limit: { type: "number", description: "Max results (default 100, max 1000)" },
+        },
+        required: ["agency"],
+      },
+    },
+    {
       name: "get_notices_by_date_range",
       description:
         "Get all City Record notices published within a date range.",
@@ -177,6 +218,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .object({ limit: z.number().max(100).optional() })
           .parse(args ?? {});
         const results = await getOpenSolicitations(limit ?? 25);
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+      }
+
+      case "search_agency_procurement": {
+        const { agency, keywords, notice_type, since_date, until_date, limit } = z
+          .object({
+            agency: z.string(),
+            keywords: z.array(z.string()).optional(),
+            notice_type: z.string().optional(),
+            since_date: z.string().optional(),
+            until_date: z.string().optional(),
+            limit: z.number().max(1000).optional(),
+          })
+          .parse(args);
+        const results = await searchAgencyProcurement(agency, {
+          keywords,
+          noticeType: notice_type,
+          sinceDate: since_date,
+          untilDate: until_date,
+          limit: limit ?? 100,
+        });
         return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
       }
 
