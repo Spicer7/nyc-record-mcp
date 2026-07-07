@@ -130,7 +130,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "array",
             items: { type: "string" },
             description:
-              "Optional keywords, OR-matched against notice title and description, e.g. ['paint', 'floor tile', 'vinyl']",
+              "Optional keywords, OR-matched against notice title, description, and PIN " +
+              "(so RFQ/solicitation numbers work too), e.g. ['paint', 'floor tile', 'vinyl'] or ['515716']",
           },
           notice_type: {
             type: "string",

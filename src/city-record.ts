@@ -185,6 +185,7 @@ export async function searchAgencyProcurement(
       return [
         `upper(short_title) like upper('%${escaped}%')`,
         `upper(additional_description_1) like upper('%${escaped}%')`,
+        `upper(pin) like upper('%${escaped}%')`,
       ];
     });
     clauses.push(`(${keywordClauses.join(" OR ")})`);

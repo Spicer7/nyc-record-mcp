@@ -159,7 +159,7 @@ Award notices include `vendor_name` and `contract_amount` (the winning bid). Whe
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `agency` | string | yes | — | Agency name or partial name |
-| `keywords` | string[] | no | — | OR-matched against notice title and description |
+| `keywords` | string[] | no | — | OR-matched against notice title, description, and PIN (RFQ/solicitation numbers work too) |
 | `notice_type` | string | no | — | One of: Solicitation, Award, Intent to Award, Intent to Negotiate, Vendor List, Sale |
 | `since_date` | string | no | — | Only notices published on/after this date, YYYY-MM-DD |
 | `until_date` | string | no | — | Only notices published on/before this date, YYYY-MM-DD |
